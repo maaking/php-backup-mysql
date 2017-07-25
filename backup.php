@@ -2,10 +2,15 @@
 
 // Check allowed ip or show 404 page (to prevent abuse)
 
-define('DB_HOST', '');
-define('DB_USER', '');
-define('DB_PASS', '');
-define('BACKUP_DIR', '');
+// Temporary config file outside of git
+include('config.php');
+
+if (!defined('DB_HOST')) {
+    define('DB_HOST', '');
+    define('DB_USER', '');
+    define('DB_PASS', '');
+    define('BACKUP_DIR', '');
+}
 
 $databases = '*'; // All databases
 // $databases = array('db1', 'db2', 'db3'); // Specific databases
