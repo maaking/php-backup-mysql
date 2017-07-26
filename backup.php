@@ -18,6 +18,7 @@ if (!defined('DB_HOST')) {
     define('DB_PASS', '');
     define('BACKUP_DIR', '');
     define('CREATE_DB', false);
+    define('CHARSET', 'utf8');
 }
 
 $databases = '*'; // All databases
@@ -27,7 +28,7 @@ $databases = '*'; // All databases
 $exclude = array('information_schema', 'performance_schema', 'mysql', 'test');
 
 // Create backup dir if it doesn't exist, with correct permissions
-if (!is_dir(BACKUP_DIR) && !mkdir(BACKUP_DIR, 0777, true)) {
+if (!is_dir(BACKUP_DIR) && !mkdir(BACKUP_DIR, 0775, true)) {
     die('Create Folder Error (' . BACKUP_DIR . ')');
 }
 
@@ -55,20 +56,28 @@ $row_max = $result_max->fetch_array();
 $max_allowed_packet = (int)$row_max[1];
 
 // Override maximum allowed packet (usually 1MB)
-$max_allowed_packet = 10000;
+$max_allowed_packet = 1000000;
 
-echo 'Max Allowed Packet: '.$max_allowed_packet.'<br /><br />';
+echo 'Max Allowed Packet: '.$max_allowed_packet.'<br />'.PHP_EOL;
+
+// Set charset (encoding)
+$db->set_charset(CHARSET);
+$charset = $db->get_charset();
+echo 'Charset: '.$charset->charset.'<br />'.PHP_EOL;
+
+// Empty line
+echo '<br />'.PHP_EOL;
 
 // For each database
 foreach ($databases as $database) {
 
-    echo 'Database: '.$database.'<br />';
+    echo 'Database: '.$database.'<br />'.PHP_EOL;
     $db->select_db($database);
 
     $filename = BACKUP_DIR.$database.'-'.date('Ymd').'.sql';
 
     touch($filename);
-    chmod($filename, 0777);
+    chmod($filename, 0775);
 
     // Create output file or truncate if it exists
     $file = fopen($filename, 'w+');
@@ -87,7 +96,7 @@ foreach ($databases as $database) {
 
         $table = $row_tables[0];
 
-        echo 'Table: '.$table.'<br />';
+        // echo 'Table: '.$table.'<br />'.PHP_EOL;
 
         // Output DROP TABLE
         fwrite($file, 'DROP TABLE IF EXISTS `'.$table.'`;'.PHP_EOL);
@@ -105,8 +114,7 @@ foreach ($databases as $database) {
         $field_count = $db->field_count;
         $num_rows = $result_table_rows->num_rows;
 
-        echo 'Field Count: '.$field_count.'<br />';
-        echo 'Num Rows: '.$num_rows.'<br />';
+        // echo 'Fields: '.$field_count.' - Rows: '.$num_rows.'<br />'.PHP_EOL;
 
         if ($num_rows > 0) {
 
@@ -150,14 +158,16 @@ foreach ($databases as $database) {
     // Close output file
     fclose($file);
 
-    echo 'Success<br />';
+    echo 'Success<br />'.PHP_EOL;
 
-    echo '<br />';
+    // Empty line
+    echo '<br />'.PHP_EOL;
 
-    break; // one database
+    // break; // one database
 }
 
 // Close database connection
 $db->close();
 
 // TODO: Handle errors and exceptions gracefully
+// TODO: More comments :)
