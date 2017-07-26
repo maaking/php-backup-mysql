@@ -11,11 +11,13 @@ error_reporting(E_ALL);
 include('config.php');
 
 // DB Config fallback
+// TODO: Change to defaults overriden by config file
 if (!defined('DB_HOST')) {
     define('DB_HOST', '');
     define('DB_USER', '');
     define('DB_PASS', '');
     define('BACKUP_DIR', '');
+    define('CREATE_DB', false);
 }
 
 $databases = '*'; // All databases
@@ -25,7 +27,7 @@ $databases = '*'; // All databases
 $exclude = array('information_schema', 'performance_schema', 'mysql', 'test');
 
 // Create backup dir if it doesn't exist, with correct permissions
-if (!is_dir(BACKUP_DIR) && !mkdir(BACKUP_DIR, 0755, true)) {
+if (!is_dir(BACKUP_DIR) && !mkdir(BACKUP_DIR, 0777, true)) {
     die('Create Folder Error (' . BACKUP_DIR . ')');
 }
 
@@ -40,8 +42,9 @@ if ($databases === '*') {
     $databases = array();
     $result = $db->query('SHOW DATABASES');
     while ($row = $result->fetch_array()) {
-        if (!in_array($row[0], $exclude)) {
-            $databases[] = $row[0];
+        $database = $row[0];
+        if (!in_array($database, $exclude)) {
+            $databases[] = $database;
         }
     }
 }
@@ -50,20 +53,44 @@ if ($databases === '*') {
 foreach ($databases as $database) {
 
     echo 'Database: '.$database.'<br />';
+    $db->select_db($database);
+
+    $filename = BACKUP_DIR.$database.'-'.date('Ymd').'.sql';
+
+    touch($filename);
+    chmod($filename, 0777);
 
     // Create output file or truncate if it exists
+    $file = fopen($filename, 'w+');
 
     // Output CREATE DATABASE and USE DATABASE
+    if (CREATE_DB) {
+        fwrite($file, 'CREATE DATABASE `'.$database.'`;'.PHP_EOL);
+        fwrite($file, 'USE DATABASE `'.$database.'`;'.PHP_EOL);
+    }
 
     // Get all table names
+    $result_tables = $db->query('SHOW TABLES');
 
     // For each table
+    while ($row_tables = $result_tables->fetch_array()) {
+
+        $table = $row_tables[0];
+
+        echo 'Table: '.$table.'<br />';
 
         // Output DROP TABLE
+        fwrite($file, 'DROP TABLE IF EXISTS `'.$table.'`;'.PHP_EOL);
 
-        // Fetch table structure (SHOW CREATE TABLE)
+        // Fetch table structure
+        $result_table_struct = $db->query('SHOW CREATE TABLE `'.$table.'`;');
+        $row_table_struct = $result_table_struct->fetch_array();
+        $table_struct_sql = $row_table_struct[1].';';
 
         // Output CREATE TABLE
+        fwrite($file, $table_struct_sql.PHP_EOL);
+
+        // Fetch table rows
 
         // For each table row
 
@@ -71,8 +98,14 @@ foreach ($databases as $database) {
 
             // Output INSERT INTO (maybe group multiple)
 
-    // Close output file
+    }
 
+    // Close output file
+    fclose($file);
+
+    echo 'Success<br />';
+
+    echo '<br />';
 }
 
 // Close database connection
