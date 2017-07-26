@@ -49,6 +49,16 @@ if ($databases === '*') {
     }
 }
 
+// Get maximum allowed packet
+$result_max = $db->query('SHOW VARIABLES LIKE \'max_allowed_packet\';');
+$row_max = $result_max->fetch_array();
+$max_allowed_packet = (int)$row_max[1];
+
+// Override maximum allowed packet (usually 1MB)
+$max_allowed_packet = 10000;
+
+echo 'Max Allowed Packet: '.$max_allowed_packet.'<br /><br />';
+
 // For each database
 foreach ($databases as $database) {
 
@@ -91,13 +101,38 @@ foreach ($databases as $database) {
         fwrite($file, $table_struct_sql.PHP_EOL);
 
         // Fetch table rows
+        $result_table_rows = $db->query('SELECT * FROM `'.$table.'`;');
+        $field_count = $db->field_count;
+
+        echo 'Field Count: '.$field_count.'<br />';
+
+        $sql_start = 'INSERT INTO `'.$table.'`';
+        $sql = $sql_start;
 
         // For each table row
+        while ($row_table = $result_table_rows->fetch_array()) {
 
-            // Escape row
+            $new_sql = PHP_EOL.'VALUES (';
 
-            // Output INSERT INTO (maybe group multiple)
+            for ($i = 0; $i < $field_count; $i++) {
+                $new_sql .= '"'.$row_table[$i].'", '; // Already escaped in the original database
+            }
 
+            $new_sql = substr($new_sql, 0, -2).'),';
+
+            if (strlen($sql.$new_sql) > $max_allowed_packet) {
+                $sql = substr($sql, 0, -1).';';
+                echo $sql.PHP_EOL;
+                $sql = $sql_start.$new_sql;
+            } else {
+                $sql .= $new_sql;
+            }
+        }
+
+        $sql = substr($sql, 0, -1).';';
+        echo $sql.PHP_EOL;
+
+        break; // one table
     }
 
     // Close output file
@@ -106,6 +141,8 @@ foreach ($databases as $database) {
     echo 'Success<br />';
 
     echo '<br />';
+
+    break; // one database
 }
 
 // Close database connection
