@@ -122,7 +122,9 @@ foreach ($databases as $database) {
 
             if (strlen($sql.$new_sql) > $max_allowed_packet) {
                 $sql = substr($sql, 0, -1).';';
-                echo $sql.PHP_EOL;
+
+                fwrite($file, $sql.PHP_EOL);
+
                 $sql = $sql_start.$new_sql;
             } else {
                 $sql .= $new_sql;
@@ -130,7 +132,8 @@ foreach ($databases as $database) {
         }
 
         $sql = substr($sql, 0, -1).';';
-        echo $sql.PHP_EOL;
+
+        fwrite($file, $sql.PHP_EOL);
 
         break; // one table
     }
