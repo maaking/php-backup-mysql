@@ -103,39 +103,48 @@ foreach ($databases as $database) {
         // Fetch table rows
         $result_table_rows = $db->query('SELECT * FROM `'.$table.'`;');
         $field_count = $db->field_count;
+        $num_rows = $result_table_rows->num_rows;
 
         echo 'Field Count: '.$field_count.'<br />';
+        echo 'Num Rows: '.$num_rows.'<br />';
 
-        $sql_start = 'INSERT INTO `'.$table.'`';
-        $sql = $sql_start;
+        if ($num_rows > 0) {
 
-        // For each table row
-        while ($row_table = $result_table_rows->fetch_array()) {
+            $sql_start = 'INSERT INTO `'.$table.'`';
+            $sql = $sql_start;
 
-            $new_sql = PHP_EOL.'VALUES (';
+            // For each table row
+            while ($row_table = $result_table_rows->fetch_array()) {
 
-            for ($i = 0; $i < $field_count; $i++) {
-                $new_sql .= '"'.$row_table[$i].'", '; // Already escaped in the original database
+                $new_sql = PHP_EOL.'  VALUES (';
+
+                for ($i = 0; $i < $field_count; $i++) {
+                    $value = str_replace('\\\\\\', '\\', $db->real_escape_string($row_table[$i]));
+                    $new_sql .= '"'.$value.'", ';
+                }
+
+                $new_sql = substr($new_sql, 0, -2).'),';
+
+                if (strlen($sql.$new_sql) > $max_allowed_packet) {
+                    $sql = substr($sql, 0, -1).';';
+
+                    fwrite($file, $sql.PHP_EOL);
+
+                    $sql = $sql_start.$new_sql;
+                } else {
+                    $sql .= $new_sql;
+                }
+
+                // break; // one row
             }
 
-            $new_sql = substr($new_sql, 0, -2).'),';
+            $sql = substr($sql, 0, -1).';';
 
-            if (strlen($sql.$new_sql) > $max_allowed_packet) {
-                $sql = substr($sql, 0, -1).';';
+            fwrite($file, $sql.PHP_EOL);
 
-                fwrite($file, $sql.PHP_EOL);
-
-                $sql = $sql_start.$new_sql;
-            } else {
-                $sql .= $new_sql;
-            }
         }
 
-        $sql = substr($sql, 0, -1).';';
-
-        fwrite($file, $sql.PHP_EOL);
-
-        break; // one table
+        // break; // one table
     }
 
     // Close output file
