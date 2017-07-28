@@ -12,6 +12,7 @@ include('config.php');
 // TODO: Change to defaults overriden by config file
 // TODO: Allow multiple users
 if (!defined('DB_HOST')) {
+    define('ALLOWED_IP', '');
     define('DB_HOST', '');
     define('DB_USER', '');
     define('DB_PASS', '');
