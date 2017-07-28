@@ -1,7 +1,5 @@
 <?php
 
-// Check allowed ip or show 404 page (to prevent abuse)
-
 // Limits and errors
 set_time_limit(0);
 ini_set('memory_limit', '-1');
@@ -12,6 +10,7 @@ include('config.php');
 
 // DB Config fallback
 // TODO: Change to defaults overriden by config file
+// TODO: Allow multiple users
 if (!defined('DB_HOST')) {
     define('DB_HOST', '');
     define('DB_USER', '');
@@ -21,14 +20,25 @@ if (!defined('DB_HOST')) {
     define('CHARSET', 'utf8');
 }
 
+// Check allowed ip or show 404 page (to prevent abuse)
+// if ($_SERVER['REMOTE_ADDR'] !== ALLOWED_IP) {
+//     http_response_code(404);
+//     die();
+// }
+
+ob_implicit_flush(true);
+ob_start();
+
+$old_mask = umask(0);
+
 $databases = '*'; // All databases
-// $databases = array('db1', 'db2', 'db3'); // Specific databases
+// $databases = array(''); // Specific databases
 
 // Databases to exclude from backup
 $exclude = array('information_schema', 'performance_schema', 'mysql', 'test');
 
-// Create backup dir if it doesn't exist, with correct permissions
-if (!is_dir(BACKUP_DIR) && !mkdir(BACKUP_DIR, 0775, true)) {
+// Create backup dir if it doesn't exist
+if (!is_dir(BACKUP_DIR) && !mkdir(BACKUP_DIR, 0777, true)) {
     die('Create Folder Error (' . BACKUP_DIR . ')');
 }
 
@@ -58,26 +68,27 @@ $max_allowed_packet = (int)$row_max[1];
 // Override maximum allowed packet (usually 1MB)
 $max_allowed_packet = 1000000;
 
-echo 'Max Allowed Packet: '.$max_allowed_packet.'<br />'.PHP_EOL;
+echo 'Max Allowed Packet: '.$max_allowed_packet.'<br />'.PHP_EOL; ob_flush();
 
 // Set charset (encoding)
 $db->set_charset(CHARSET);
 $charset = $db->get_charset();
-echo 'Charset: '.$charset->charset.'<br />'.PHP_EOL;
+echo 'Charset: '.$charset->charset.'<br />'.PHP_EOL; ob_flush();
 
 // Empty line
-echo '<br />'.PHP_EOL;
+echo '<br />'.PHP_EOL; ob_flush();
 
 // For each database
 foreach ($databases as $database) {
 
-    echo 'Database: '.$database.'<br />'.PHP_EOL;
+    echo 'Database: '.$database.'<br />'.PHP_EOL; ob_flush();
+
     $db->select_db($database);
 
     $filename = BACKUP_DIR.$database.'-'.date('Ymd').'.sql';
 
     touch($filename);
-    chmod($filename, 0775);
+    chmod($filename, 0777);
 
     // Create output file or truncate if it exists
     $file = fopen($filename, 'w+');
@@ -96,25 +107,35 @@ foreach ($databases as $database) {
 
         $table = $row_tables[0];
 
-        // echo 'Table: '.$table.'<br />'.PHP_EOL;
+        echo 'Table: '.$table.'<br />'.PHP_EOL; ob_flush();
 
         // Output DROP TABLE
         fwrite($file, 'DROP TABLE IF EXISTS `'.$table.'`;'.PHP_EOL);
 
         // Fetch table structure
         $result_table_struct = $db->query('SHOW CREATE TABLE `'.$table.'`;');
+        if (!$result_table_rows) {
+            echo 'Error fetching struct for table: '.$table.'<br />'.PHP_EOL; ob_flush();
+            continue;
+        }
         $row_table_struct = $result_table_struct->fetch_array();
         $table_struct_sql = $row_table_struct[1].';';
+
+        // echo 'Table Struct: '.print_r($row_table_struct, true).'<br />'.PHP_EOL; ob_flush();
 
         // Output CREATE TABLE
         fwrite($file, $table_struct_sql.PHP_EOL);
 
         // Fetch table rows
         $result_table_rows = $db->query('SELECT * FROM `'.$table.'`;');
+        if (!$result_table_rows) {
+            echo 'Error fetching rows from '.$table.'<br />'.PHP_EOL; ob_flush();
+            continue;
+        }
         $field_count = $db->field_count;
         $num_rows = $result_table_rows->num_rows;
 
-        // echo 'Fields: '.$field_count.' - Rows: '.$num_rows.'<br />'.PHP_EOL;
+        echo 'Fields: '.$field_count.' - Rows: '.$num_rows.'<br />'.PHP_EOL; ob_flush();
 
         if ($num_rows > 0) {
 
@@ -126,6 +147,7 @@ foreach ($databases as $database) {
 
                 $new_sql = PHP_EOL.'  VALUES (';
 
+                // Escape string, and prevent double escaping
                 for ($i = 0; $i < $field_count; $i++) {
                     $value = str_replace('\\\\\\', '\\', $db->real_escape_string($row_table[$i]));
                     $new_sql .= '"'.$value.'", ';
@@ -133,6 +155,7 @@ foreach ($databases as $database) {
 
                 $new_sql = substr($new_sql, 0, -2).'),';
 
+                // Limit multiple inserts to maximum packet
                 if (strlen($sql.$new_sql) > $max_allowed_packet) {
                     $sql = substr($sql, 0, -1).';';
 
@@ -142,8 +165,6 @@ foreach ($databases as $database) {
                 } else {
                     $sql .= $new_sql;
                 }
-
-                // break; // one row
             }
 
             $sql = substr($sql, 0, -1).';';
@@ -151,23 +172,20 @@ foreach ($databases as $database) {
             fwrite($file, $sql.PHP_EOL);
 
         }
-
-        // break; // one table
     }
 
     // Close output file
     fclose($file);
 
-    echo 'Success<br />'.PHP_EOL;
+    echo 'Success<br />'.PHP_EOL; ob_flush();
 
     // Empty line
-    echo '<br />'.PHP_EOL;
-
-    // break; // one database
+    echo '<br />'.PHP_EOL; ob_flush();
 }
 
 // Close database connection
 $db->close();
 
-// TODO: Handle errors and exceptions gracefully
-// TODO: More comments :)
+umask($old_mask);
+
+ob_end_flush();
