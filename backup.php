@@ -115,7 +115,7 @@ foreach ($databases as $database) {
 
         // Fetch table structure
         $result_table_struct = $db->query('SHOW CREATE TABLE `'.$table.'`;');
-        if (!$result_table_rows) {
+        if (!$result_table_struct) {
             echo 'Error fetching struct for table: '.$table.'<br />'.PHP_EOL; ob_flush();
             continue;
         }
@@ -140,13 +140,13 @@ foreach ($databases as $database) {
 
         if ($num_rows > 0) {
 
-            $sql_start = 'INSERT INTO `'.$table.'`';
+            $sql_start = 'INSERT INTO `'.$table.'` VALUES ';
             $sql = $sql_start;
 
             // For each table row
             while ($row_table = $result_table_rows->fetch_array()) {
 
-                $new_sql = PHP_EOL.'  VALUES (';
+                $new_sql = PHP_EOL.'(';
 
                 // Escape string, and prevent double escaping
                 for ($i = 0; $i < $field_count; $i++) {
